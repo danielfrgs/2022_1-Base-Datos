@@ -1,1 +1,527 @@
+{
+ "cells": [
+  {
+   "cell_type": "code",
+   "execution_count": 18,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# ! pip install neo4j"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 39,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "import pandas as pd"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "#LOAD CSV WITH HEADERS FROM \n",
+    "#\"file:///Datos.csv\" AS row\n",
+    "#MERGE (p:Producto {nombre_producto:row.PRODUCTO})\n",
+    "#MERGE (t:Tienda {nombre_tienda:row.RAZON_SOCIAL, estado:row.ENTIDAD, municipio:row.MUNICIPIO, giro_comercial:row.GIRO_COMERCIAL})\n",
+    "#CREATE (p)-[v:SE_VENDE_EN {cumplimiento:row.CUMPLIMIENTO, norma:row.NOM}]->(t)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 16,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# import the neo4j driver for Python\n",
+    "from neo4j import GraphDatabase\n",
+    "\n",
+    "# Database Credentials\n",
+    "uri             = \"neo4j://localhost:7687\"\n",
+    "userName        = \"neo4j\"\n",
+    "password        = \"12345\"\n",
+    "\n",
+    "# Connect to the neo4j database server\n",
+    "graphDB_Driver  = GraphDatabase.driver(uri, auth=(userName, password))\n",
+    "graphDB_Session = graphDB_Driver.session()"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 17,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "<Record n=<Node id=2725 labels=frozenset({'Producto'}) properties={'nombre_producto': 'ATUN'}>>\n",
+      "<Record n=<Node id=2726 labels=frozenset({'Tienda'}) properties={'giro_comercial': 'ABARROTES', 'estado': 'AGUASCALIENTES', 'municipio': 'AGUASCALIENTES', 'nombre_tienda': 'ABARROTES - JOSE ALVARO NUNEZ GUZMAN'}>>\n",
+      "<Record n=<Node id=2727 labels=frozenset({'Producto'}) properties={'nombre_producto': 'FRIJOLES'}>>\n",
+      "<Record n=<Node id=2728 labels=frozenset({'Tienda'}) properties={'giro_comercial': 'ABARROTES', 'estado': 'AGUASCALIENTES', 'municipio': 'AGUASCALIENTES', 'nombre_tienda': 'ABARROTES - JOSE ALVARO NU�EZ GUZMAN'}>>\n",
+      "<Record n=<Node id=2729 labels=frozenset({'Producto'}) properties={'nombre_producto': 'VELADORAS  Y CERAS'}>>\n",
+      "<Record n=<Node id=2730 labels=frozenset({'Producto'}) properties={'nombre_producto': 'BRANDY'}>>\n",
+      "<Record n=<Node id=2731 labels=frozenset({'Tienda'}) properties={'giro_comercial': 'RESTAURANT-BAR', 'estado': 'AGUASCALIENTES', 'municipio': 'AGUASCALIENTES', 'nombre_tienda': 'ANTIGUA HACIENDA LA NORIA- HECTOR FLORES AGUILAR'}>>\n",
+      "<Record n=<Node id=2732 labels=frozenset({'Tienda'}) properties={'giro_comercial': 'MOTEL', 'estado': 'AGUASCALIENTES', 'municipio': 'AGUASCALIENTES', 'nombre_tienda': 'ASFEIXAS  S.A. DE C.V.'}>>\n",
+      "<Record n=<Node id=2733 labels=frozenset({'Producto'}) properties={'nombre_producto': 'ACCESORIOS PARA AUTOS'}>>\n",
+      "<Record n=<Node id=2734 labels=frozenset({'Tienda'}) properties={'giro_comercial': 'ACCESORIOS PARA AUTOMOVIL', 'estado': 'AGUASCALIENTES', 'municipio': 'AGUASCALIENTES', 'nombre_tienda': 'AUTOZONE DE MEXICO S. DE R.L. DE C.V.'}>>\n"
+     ]
+    }
+   ],
+   "source": [
+    "cqlNodeQuery = \"MATCH (n) RETURN n LIMIT 10\"\n",
+    "nodes = graphDB_Session.run(cqlNodeQuery)\n",
+    "for node in nodes:\n",
+    "    print(node)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 33,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "def ingresa_compra(usuario, tienda, estado, municipio, giro, lista_productos, lista_precios, lista_cantidades):\n",
+    "    assert len(lista_productos) == len(lista_precios), 'Lista de productos y precios distinta'\n",
+    "    assert len(lista_productos) == len(lista_cantidades), 'Lista de productos y cantidades distinta'\n",
+    "    consulta = '''MERGE (u:Usuario {nombre:'%s'}) \n",
+    "CREATE (u)-[:HACE]->(c:Compra {hora:time({timezone: 'America/Mexico_City'})})\n",
+    "MERGE (t:Tienda {nombre_tienda:'%s', estado:'%s', municipio:'%s', giro_comercial:'%s'})\n",
+    "CREATE (c)-[:COMPRO_EN]->(t)\n",
+    "MERGE (p:Producto {nombre_producto:'%s'})\n",
+    "CREATE (c)-[:COMPRO {precio:%.2f, cantidad:%d}]->(p)''' % (usuario.upper(), tienda.upper(), estado.upper(), municipio.upper(), giro.upper(), lista_productos[0].upper(), lista_precios[0], lista_cantidades[0])\n",
+    "    \n",
+    "    l = len(lista_productos)\n",
+    "    if l > 1:\n",
+    "        for i in range(l-1):\n",
+    "            consulta += '''\n",
+    "MERGE (p%d:Producto {nombre_producto:'%s'})\n",
+    "CREATE (c)-[:COMPRO {precio:%.2f, cantidad:%d}]->(p%d)''' % (i, lista_productos[i+1].upper(), lista_precios[i+1], lista_cantidades[i+1], i)\n",
+    "    \n",
+    "    graphDB_Session.run(consulta)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 34,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "ingresa_compra('Huguito', 'C&A DE MEXICO S. DE R.L.', 'AGUASCALIENTES', 'AGUASCALIENTES', 'TIENDA DEPARTAMENTAL', ['CHAMARRA', 'ROPA CABALLERO'], [500, 400], [2,1])\n",
+    "ingresa_compra('Daniel', 'TIENDAS SORIANA S.A. DE C.V. SUCURSAL GERANEOS', 'BAJA CALIFORNIA', 'ENSENADA', 'TIENDA DE AUTOSERVICIO', ['ATUN', 'PRODUCTOS ALIMENTICIOS'], [6.99, 25.87], [12, 5])\n",
+    "ingresa_compra('Daniel', 'LOB FOOTWEAR  S.A. DE C.V.', 'CAMPECHE', 'CAMPECHE', 'ZAPATERIA', ['ZAPATOS'], [300.50], [1])\n",
+    "ingresa_compra('Daniel', 'TATIANA�S CURIOS', 'BAJA CALIFORNIA', 'ENSENADA', 'ARTESANIAS', ['JOYERIA'], [1560.50], [1])\n",
+    "ingresa_compra('Huguito', 'SUBURBIA S. DE R.L. DE C.V.', 'DISTRITO FEDERAL', 'TLALPAN', 'TIENDA DEPARTAMENTAL', ['PANTALON', 'PLAYERA', 'ZAPATOS'], [100,200,300], [3,2,1])\n",
+    "ingresa_compra('Kike', 'PERFUMERIA DAISY  Y/O ADRIAN LEJARAZO GAONA', 'DISTRITO FEDERAL', 'CUAUHTEMOC', 'PERFUMERIA', ['ARTICULOS PARA EL CABELLO', 'ARTICULOS DE BELLEZA'], [1265.99, 200.01], [1,2])\n",
+    "ingresa_compra('Carlos', 'GRUPO INDUSTRIAL CUADRITOS BIOTEK S.A. DE C.V.', 'GUANAJUATO', 'CELAYA', 'LECHE', ['LECHE', 'PRODUCTOS LACTEOS'], [12.70, 55.80], [1, 5])\n",
+    "ingresa_compra('Ana', 'NETO TIENDAS SUPER PRECIO S.A DE C.V.', 'MEXICO', 'NAUCALPAN DE JUAREZ', 'ABARROTES', ['MAYONESA', 'SOPA DE PASTA', 'VERDURAS ENLATADAS'], [15.50, 25.60, 33.45], [3, 4, 1])\n",
+    "ingresa_compra('Juan', '7 ELEVEN MEXICO S.A. DE C.V.', 'MEXICO', 'NAUCALPAN DE JUAREZ', 'TIENDAS DE CONVENIENCIA', ['ENSALADAS', 'FRIJOLES', 'MAYONESA', 'PAN', 'SALSA', 'AGUA PURIFICADA'], [15.50, 25.60, 33.45, 30, 50.40, 60.49], [1, 2, 1, 3, 1, 12])\n"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 58,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "def consulta_producto_estado(producto, estado):\n",
+    "    consulta = '''MATCH (p:Producto {nombre_producto:'%s'})-[:SE_VENDE_EN]->(t:Tienda {estado:'%s'})\n",
+    "RETURN t.nombre_tienda, t.municipio''' % (producto.upper(), estado.upper())\n",
+    "    consulta = pd.DataFrame(graphDB_Session.run(consulta))\n",
+    "    if len(consulta) == 0:\n",
+    "        return 'No hay lugares en %s donde puedas encontrar %s' % (estado.upper(), producto.upper())\n",
+    "    else:\n",
+    "        consulta.columns = ['Tienda', 'Municipio']\n",
+    "    return consulta"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 59,
+   "metadata": {},
+   "outputs": [
+    {
+     "data": {
+      "text/plain": [
+       "'No hay lugares en DISTRITO FEDERA donde puedas encontrar FRIJOLES'"
+      ]
+     },
+     "execution_count": 59,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "consulta_producto_estado('frijoles', 'distrito federa')"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 55,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "def consulta_estado_tienda(estado, tienda):\n",
+    "    consulta = '''MATCH (p:Producto)-[v:SE_VENDE_EN]->(t:Tienda {estado:'%s', nombre_tienda:\"%s\"})\n",
+    "WHERE v.cumplimiento = 'NO CUMPLE'\n",
+    "RETURN p.nombre_producto, v.norma''' % (estado.upper(), tienda.upper())\n",
+    "    consulta = pd.DataFrame(graphDB_Session.run(consulta))\n",
+    "    if len (consulta) == 0:\n",
+    "        return 'Todos los productos de esta tienda cumplen con la norma.'\n",
+    "    else:\n",
+    "        consulta.columns = ['Producto', 'Norma Incumplida']\n",
+    "    return consulta"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 57,
+   "metadata": {},
+   "outputs": [
+    {
+     "data": {
+      "text/html": [
+       "<div>\n",
+       "<style scoped>\n",
+       "    .dataframe tbody tr th:only-of-type {\n",
+       "        vertical-align: middle;\n",
+       "    }\n",
+       "\n",
+       "    .dataframe tbody tr th {\n",
+       "        vertical-align: top;\n",
+       "    }\n",
+       "\n",
+       "    .dataframe thead th {\n",
+       "        text-align: right;\n",
+       "    }\n",
+       "</style>\n",
+       "<table border=\"1\" class=\"dataframe\">\n",
+       "  <thead>\n",
+       "    <tr style=\"text-align: right;\">\n",
+       "      <th></th>\n",
+       "      <th>Producto</th>\n",
+       "      <th>Norma Incumplida</th>\n",
+       "    </tr>\n",
+       "  </thead>\n",
+       "  <tbody>\n",
+       "    <tr>\n",
+       "      <th>0</th>\n",
+       "      <td>JUGUETES</td>\n",
+       "      <td>NOM-015-SCFI-2007</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>1</th>\n",
+       "      <td>APARATOS ELECTRICOS</td>\n",
+       "      <td>NOM-001-SCFI-1993</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>2</th>\n",
+       "      <td>APARATOS ELECTRICOS</td>\n",
+       "      <td>NOM-003-SCFI-2000</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>3</th>\n",
+       "      <td>CARRIOLA</td>\n",
+       "      <td>NOM-133/2-SCFI-1999</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>4</th>\n",
+       "      <td>ANDADERAS</td>\n",
+       "      <td>NOM-133/1-SCFI-1999</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>5</th>\n",
+       "      <td>BEBIDAS</td>\n",
+       "      <td>NOM-051-SCFI/SSA1-2010</td>\n",
+       "    </tr>\n",
+       "  </tbody>\n",
+       "</table>\n",
+       "</div>"
+      ],
+      "text/plain": [
+       "              Producto        Norma Incumplida\n",
+       "0             JUGUETES       NOM-015-SCFI-2007\n",
+       "1  APARATOS ELECTRICOS       NOM-001-SCFI-1993\n",
+       "2  APARATOS ELECTRICOS       NOM-003-SCFI-2000\n",
+       "3             CARRIOLA     NOM-133/2-SCFI-1999\n",
+       "4            ANDADERAS     NOM-133/1-SCFI-1999\n",
+       "5              BEBIDAS  NOM-051-SCFI/SSA1-2010"
+      ]
+     },
+     "execution_count": 57,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "consulta_estado_tienda('distrito federal', 'TIENDAS SORIANA  S.A. DE c.v.')"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 65,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "def consulta_opciones(estado, producto):\n",
+    "    consulta = '''MATCH (p:Producto {nombre_producto:'%s'})-[v:SE_VENDE_EN]->(t:Tienda {estado:'%s'})\n",
+    "WHERE v.cumplimiento = 'CUMPLE'\n",
+    "RETURN t.nombre_tienda, t.municipio''' % (producto.upper(), estado.upper())\n",
+    "    consulta = pd.DataFrame(graphDB_Session.run(consulta))\n",
+    "    if len (consulta) == 0:\n",
+    "        return 'No hay opciones de %s en %s sin incumplimiento'  % (producto.upper(), estado.upper())\n",
+    "    else:\n",
+    "        consulta.columns = ['Tienda', 'Municipio']\n",
+    "    return consulta"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 67,
+   "metadata": {},
+   "outputs": [
+    {
+     "data": {
+      "text/plain": [
+       "'No hay opciones de FRIJOL en DISTRITO FEDERAL sin incumplimiento'"
+      ]
+     },
+     "execution_count": 67,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "consulta_opciones('distrito federal', 'frijol')"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 114,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "def estados_incumplimineto(tipo,limit=32):\n",
+    "    assert tipo == 'Mayor' or tipo == 'Menor', 'Ingrese un tipo válido (Mayor / Menor)'\n",
+    "    consulta1 = '''MATCH (t:Tienda)\n",
+    "RETURN t.estado, COUNT(*)'''\n",
+    "    consulta2 = '''MATCH (p:Producto)-[v:SE_VENDE_EN {cumplimiento:'NO CUMPLE'}]->(t1:Tienda)\n",
+    "RETURN t1.estado, COUNT(*)'''\n",
+    "    consulta1 = pd.DataFrame(graphDB_Session.run(consulta1))\n",
+    "    consulta1.columns = ['Estado', 'Numero_tiendas']\n",
+    "    consulta2 = pd.DataFrame(graphDB_Session.run(consulta2))\n",
+    "    consulta2.columns = ['Estado', 'Numero_incumplimientos']\n",
+    "    consulta = consulta1.merge(consulta2, on='Estado', how='left')\n",
+    "    consulta.fillna(0, inplace=True)\n",
+    "    consulta['Tasa_Incumplimiento'] = 100*consulta['Numero_incumplimientos']/consulta['Numero_tiendas']\n",
+    "    if tipo == 'Mayor':\n",
+    "        consulta = consulta.sort_values('Tasa_Incumplimiento', ascending = False).head(limit).reset_index(drop=True)\n",
+    "    if tipo == 'Menor':\n",
+    "        consulta = consulta.sort_values('Tasa_Incumplimiento').head(limit).reset_index(drop=True)\n",
+    "    \n",
+    "    return consulta\n",
+    "    "
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 116,
+   "metadata": {},
+   "outputs": [
+    {
+     "data": {
+      "text/html": [
+       "<div>\n",
+       "<style scoped>\n",
+       "    .dataframe tbody tr th:only-of-type {\n",
+       "        vertical-align: middle;\n",
+       "    }\n",
+       "\n",
+       "    .dataframe tbody tr th {\n",
+       "        vertical-align: top;\n",
+       "    }\n",
+       "\n",
+       "    .dataframe thead th {\n",
+       "        text-align: right;\n",
+       "    }\n",
+       "</style>\n",
+       "<table border=\"1\" class=\"dataframe\">\n",
+       "  <thead>\n",
+       "    <tr style=\"text-align: right;\">\n",
+       "      <th></th>\n",
+       "      <th>Estado</th>\n",
+       "      <th>Numero_tiendas</th>\n",
+       "      <th>Numero_incumplimientos</th>\n",
+       "      <th>Tasa_Incumplimiento</th>\n",
+       "    </tr>\n",
+       "  </thead>\n",
+       "  <tbody>\n",
+       "    <tr>\n",
+       "      <th>0</th>\n",
+       "      <td>SAN LUIS POTOSI</td>\n",
+       "      <td>144</td>\n",
+       "      <td>0.0</td>\n",
+       "      <td>0.000000</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>1</th>\n",
+       "      <td>AGUASCALIENTES</td>\n",
+       "      <td>104</td>\n",
+       "      <td>2.0</td>\n",
+       "      <td>1.923077</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>2</th>\n",
+       "      <td>QUERETARO</td>\n",
+       "      <td>203</td>\n",
+       "      <td>4.0</td>\n",
+       "      <td>1.970443</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>3</th>\n",
+       "      <td>MORELOS</td>\n",
+       "      <td>197</td>\n",
+       "      <td>4.0</td>\n",
+       "      <td>2.030457</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>4</th>\n",
+       "      <td>TLAXCALA</td>\n",
+       "      <td>331</td>\n",
+       "      <td>7.0</td>\n",
+       "      <td>2.114804</td>\n",
+       "    </tr>\n",
+       "  </tbody>\n",
+       "</table>\n",
+       "</div>"
+      ],
+      "text/plain": [
+       "            Estado  Numero_tiendas  Numero_incumplimientos  \\\n",
+       "0  SAN LUIS POTOSI             144                     0.0   \n",
+       "1   AGUASCALIENTES             104                     2.0   \n",
+       "2        QUERETARO             203                     4.0   \n",
+       "3          MORELOS             197                     4.0   \n",
+       "4         TLAXCALA             331                     7.0   \n",
+       "\n",
+       "   Tasa_Incumplimiento  \n",
+       "0             0.000000  \n",
+       "1             1.923077  \n",
+       "2             1.970443  \n",
+       "3             2.030457  \n",
+       "4             2.114804  "
+      ]
+     },
+     "execution_count": 116,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "estados_incumplimineto('Menor', 5)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 117,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "def recomienda(usuario, producto):\n",
+    "    consulta ='''MATCH (u:Usuario)-[:HACE]->(co:Compra)-[:COMPRO]->(p:Producto)\n",
+    "WHERE u.nombre <> '%s' AND p.nombre_producto = '%s'\n",
+    "MATCH (co)-[c1:COMPRO]->(p1:Producto)\n",
+    "WHERE p1.nombre_producto <> '%s'\n",
+    "RETURN p1.nombre_producto''' % (usuario.upper(), producto.upper(), producto.upper())\n",
+    "    consulta = pd.DataFrame(graphDB_Session.run(consulta))\n",
+    "    if len (consulta) == 0:\n",
+    "        return 'No hay recomendaciones'\n",
+    "    else:\n",
+    "        consulta.columns = ['Productos']\n",
+    "    return consulta"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 124,
+   "metadata": {},
+   "outputs": [
+    {
+     "data": {
+      "text/html": [
+       "<div>\n",
+       "<style scoped>\n",
+       "    .dataframe tbody tr th:only-of-type {\n",
+       "        vertical-align: middle;\n",
+       "    }\n",
+       "\n",
+       "    .dataframe tbody tr th {\n",
+       "        vertical-align: top;\n",
+       "    }\n",
+       "\n",
+       "    .dataframe thead th {\n",
+       "        text-align: right;\n",
+       "    }\n",
+       "</style>\n",
+       "<table border=\"1\" class=\"dataframe\">\n",
+       "  <thead>\n",
+       "    <tr style=\"text-align: right;\">\n",
+       "      <th></th>\n",
+       "      <th>Productos</th>\n",
+       "    </tr>\n",
+       "  </thead>\n",
+       "  <tbody>\n",
+       "    <tr>\n",
+       "      <th>0</th>\n",
+       "      <td>PANTALON</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>1</th>\n",
+       "      <td>PLAYERA</td>\n",
+       "    </tr>\n",
+       "  </tbody>\n",
+       "</table>\n",
+       "</div>"
+      ],
+      "text/plain": [
+       "  Productos\n",
+       "0  PANTALON\n",
+       "1   PLAYERA"
+      ]
+     },
+     "execution_count": 124,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "recomienda('Daniel', 'ZAPATOS')"
+   ]
+  }
+ ],
+ "metadata": {
+  "kernelspec": {
+   "display_name": "Python 3",
+   "language": "python",
+   "name": "python3"
+  },
+  "language_info": {
+   "codemirror_mode": {
+    "name": "ipython",
+    "version": 3
+   },
+   "file_extension": ".py",
+   "mimetype": "text/x-python",
+   "name": "python",
+   "nbconvert_exporter": "python",
+   "pygments_lexer": "ipython3",
+   "version": "3.8.5"
+  }
+ },
+ "nbformat": 4,
+ "nbformat_minor": 4
+}
 
